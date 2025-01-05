@@ -1,0 +1,32 @@
+# Build frontend
+FROM node:18-alpine AS frontend-builder
+WORKDIR /app
+COPY web/default ./web/default
+RUN cd web/default && \
+    npm install && \
+    npm run build
+
+# Build backend
+FROM golang:1.20-alpine AS backend-builder
+WORKDIR /app
+COPY . .
+COPY --from=frontend-builder /app/web/default/dist ./web/default/dist
+
+# Install build dependencies
+RUN apk add --no-cache gcc g++ make git
+
+# Build the application
+RUN go mod download && \
+    go build -ldflags "-s -w" -o one-api
+
+# Final stage
+FROM alpine:latest
+WORKDIR /app
+COPY --from=backend-builder /app/one-api .
+
+# Install runtime dependencies
+RUN apk add --no-cache tzdata && \
+    mkdir -p /data
+
+EXPOSE 3000
+CMD ["./one-api", "--port", "3000"] 
